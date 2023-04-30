@@ -1,0 +1,86 @@
+---
+title:  'Final Project Worked Exampple'
+subtitle: 'INFO 523'
+author:
+- name: Student -  [Danielle Stea]
+  affiliation: [AZ Online]
+- name: Instructor -  Cristian Román-Palacios
+  affiliation: School of Information, University of Arizona, Tucson, AZ
+output: html_document
+
+---
+This example goes through the application of principal components analysis to gene expression data from patients with acute myeloid leukemia (AML) and acute lymphoblastic leukemia (ALL). This data was published in 1999 by Gulub et al. and is shared publicly on Kaggle. The dataset can be found at https://www.kaggle.com/datasets/crawford/gene-expression?datasetId=1868
+
+```{r, echo=FALSE, results='hide', message=FALSE}
+# loads in the necessary libraries
+library(tidyverse)
+
+```
+The following tutorial was followed to create the PCA script: https://www.youtube.com/watch?v=0Jp4gsfOLMs
+
+This section serves to bring in and clean up the relevant data.
+```{r}
+# reads in the training dataset dataset from the downloaded files
+train <- read.csv("Data/data_set_ALL_AML_train.csv")
+# renames the row names with the gene number
+row.names(train) <- train$Gene.Accession.Number
+# removes 'call' and Gene description columns from the dataset and any rows with NA values
+train <- train %>%
+  select(-contains(c('call','Gene'))) %>%
+  na.omit() 
+#reads in the list of patients and their cancer diagnosis
+patients_list <- read.csv("Data/actual.csv")
+#Removes the first letter of each column name (the X) and creates a list with those column names
+names(train) <- substring(names(train),2)
+train <- train %>% 
+  select(order(as.numeric(colnames(.))))
+p1 <- colnames(train)
+#filters out the patients not used in the training dataset
+patients_list <- patients_list %>% filter(row_number() %in% p1)
+#creates a new column that merges the patient number with the cancer abbreviation
+patients_list <- patients_list %>%
+  unite(description, c("cancer","patient"))
+
+# renames the columns in the training dataset to display the patient number and the diagnosed cancer type
+names <- patients_list$description
+colnames(train) <- names
+```
+
+
+This section performs the necessary PCA calculations.
+```{r}
+#creates a matrix from the train dataframe
+train_matrix <- as.matrix(train)
+# performs pca on the transposed and scaled train matrix
+pca <- prcomp(t(train_matrix), scale = TRUE)
+#calculates the squared standard deviation to determine the variation of each principal component
+pca_var <- pca$sdev^2
+#calculates the percentage of variation of each principal component
+var_percent <- 100*pca_var/sum(pca_var)
+
+#creates a barplot with the most significant principal components
+barplot(var_percent, xlab = "Principal Component", ylab = "Percent of Variation")
+```
+
+```{r}
+#makes the PCA data into a dataframe in order to make plots with it
+pca_df <- data.frame(Sample = rownames(pca$x),
+                    PC1 = pca$x[,1], PC2 = pca$x[,2], PC3 = pca$x[,3])
+
+#Plots PC1 vs. PC2
+ggplot(pca_df, aes(x=PC1, y=PC2, label = Sample))+
+  geom_text()
+
+#Plots PC1 vs PC3
+ggplot(pca_df, aes(x=PC1, y=PC3, label = Sample))+
+  geom_text()
+
+```
+
+```{r}
+#sorts the loading scores of the PCA by absolute value, gives a list of the ten genes contributing the most to variation in PC1.
+top_genes_PC1 <- names(sort(abs(pca$rotation[,1]), decreasing = TRUE)[1:10])
+print("10 Genes contributing most to variation in PC1")
+pca$rotation[top_genes_PC1,1]
+
+```
